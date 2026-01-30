@@ -287,7 +287,10 @@ class OCRProcessor:
             
             for brand_code, part_number in part_number_pairs:
                 # 查找通用品牌
-                universal_brand = self.brand_mapping.get(brand_code, '')
+                universal_brand = self.brand_mapping.get(brand_code)
+                if universal_brand is None:
+                    self.log(f"  ⚠️ 警告: 品牌编码 [{brand_code}] 在 brandCode.csv 中未找到映射，已自动设为相同值", "warning")
+                    universal_brand = brand_code
                 
                 # 1. 原始记录
                 record = (
