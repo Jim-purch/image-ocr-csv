@@ -268,10 +268,8 @@ class OCRProcessor:
             brand_codes = ocr_results.get('品牌编码', [])
             
             self.log(f"  品牌编码列 ({len(brand_codes)} 项):", "info")
-            for i, bc in enumerate(brand_codes[:10]):  # 只显示前10个
+            for i, bc in enumerate(brand_codes):
                 self.log(f"    [{i}] {bc}", "info")
-            if len(brand_codes) > 10:
-                self.log(f"    ... 及其他 {len(brand_codes) - 10} 项", "info")
             
             # 提取件号
             part_number_pairs = self.extract_part_numbers(brand_codes, brand_part_text)
@@ -292,42 +290,45 @@ class OCRProcessor:
                     self.log(f"  ⚠️ 警告: 品牌编码 [{brand_code}] 在 brandCode.csv 中未找到映射，已自动设为相同值", "warning")
                     universal_brand = brand_code
                 
-                # 1. 原始记录
-                record = (
-                    main_brand_code,
-                    convert_code,
-                    english_name,
-                    universal_brand,
-                    brand_code,
-                    part_number
-                )
+                # 收集所有可能的件号变体
+                pns_to_add = [part_number]
                 
-                # 在当前图片内去重并添加
-                if record not in seen_in_image:
-                    new_records.append(record + (source_file,))
-                    seen_in_image.add(record)
+                # 1. 前导零变体: 如果以0开头，增加一个移除所有前导0的版本
+                if part_number.startswith('0'):
+                    stripped_pn = part_number.lstrip('0')
+                    if stripped_pn and stripped_pn != part_number:
+                        pns_to_add.append(stripped_pn)
                 
-                # 2. 检查是否需要生成“清理版”件号记录 (移除 - . / _)
+                # 2. 特殊字符变体: 移除 - . / _
                 special_chars = "-./_"
                 if any(char in part_number for char in special_chars):
-                    # 移除所有特殊符号
                     cleaned_pn = part_number
                     for char in special_chars:
                         cleaned_pn = cleaned_pn.replace(char, '')
                     
                     if cleaned_pn and cleaned_pn != part_number:
-                        record_cleaned = (
-                            main_brand_code,
-                            convert_code,
-                            english_name,
-                            universal_brand,
-                            brand_code,
-                            cleaned_pn
-                        )
-                        # 同样进行去重处理
-                        if record_cleaned not in seen_in_image:
-                            new_records.append(record_cleaned + (source_file,))
-                            seen_in_image.add(record_cleaned)
+                        pns_to_add.append(cleaned_pn)
+                        # 如果清理后的号也以0开头，同样增加移除前导0的版本
+                        if cleaned_pn.startswith('0'):
+                            stripped_cleaned = cleaned_pn.lstrip('0')
+                            if stripped_cleaned and stripped_cleaned != cleaned_pn:
+                                pns_to_add.append(stripped_cleaned)
+                
+                # 遍历所有变体并添加
+                for pn in pns_to_add:
+                    record = (
+                        main_brand_code,
+                        convert_code,
+                        english_name,
+                        universal_brand,
+                        brand_code,
+                        pn
+                    )
+                    
+                    # 在当前图片内去重并添加
+                    if record not in seen_in_image:
+                        new_records.append(record + (source_file,))
+                        seen_in_image.add(record)
             
             # 保存到CSV
             if new_records:
